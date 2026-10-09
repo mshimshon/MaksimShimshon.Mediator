@@ -1,0 +1,93 @@
+name: Release
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types:
+      - completed
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      id-token: write
+      contents: write    
+    if: |
+       github.event.workflow_run.conclusion == 'success' && 
+       startsWith(github.event.workflow_run.head_branch, 'v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: get_version
+        run: |
+          mkdir -p "/tmp/artifacts/output"
+          # Grabs the short tag name (e.g., v0.0.2)
+          TAG="${{ github.event.workflow_run.head_branch }}"
+          
+          # Strips the leading 'v' to get just the numbers (e.g., 0.0.2)
+          VERSION="${TAG#v}"
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+    
+      - name: Pack NuGet packages
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          PROJECT="${{ github.workspace }}/src/MaksimShimshon.Mediator/MaksimShimshon.Mediator.csproj"
+          dotnet pack $PROJECT -c Release -o "/tmp/artifacts/output" /p:Version=$VERSION
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          files: |
+            /tmp/artifacts/output/*.*
+
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push all NuGet packages with retry
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 30
+          max_attempts: 10
+          retry_wait_seconds: 10
+          command: |
+            VERSION="${{ steps.get_version.outputs.version }}"
+            for PKG in /tmp/artifacts/output/*.nupkg; do
+              echo "Pushing $PKG"
+              dotnet nuget push $PKG --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate  || exit 1
+            done
+
+      - name: Wait for Package availability
+        uses: nick-invision/retry@v2
+        with:
+          timeout_minutes: 300
+          retry_wait_seconds: 15
+          max_attempts: 1200
+          command: |
+            VERSION="${{ steps.get_version.outputs.version }}"
+            for PKG in /tmp/artifacts/output/*.nupkg; do
+              FILENAME=$(basename "$PKG")
+              PKG_NAME="${FILENAME%.nupkg}"
+              echo "Checking Availability for  $PKG_NAME"
+              PKG_NAME="${PKG_NAME%.$VERSION}"
+              PKG_NAME_LOWER=$(echo "$PKG_NAME" | tr '[:upper:]' '[:lower:]')
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://api.nuget.org/v3/registration5-gz-semver2/${PKG_NAME_LOWER}/${VERSION}.json")
+              [ "$STATUS" -eq 200 ] || exit 1
+            done
