@@ -77,7 +77,8 @@ public static class ServiceExt
             closedHandlerType = typeof(IRequestHandler<>)
                 .MakeGenericType(requestType);
         }
-        Mediator._requestCache[requestType] = closedHandlerType;
+        Console.WriteLine($"Caching Mediator Handler: {requestType.Name} = {handlerType}");
+        Mediator._requestCache[requestType] = handlerType;
     }
 
 
