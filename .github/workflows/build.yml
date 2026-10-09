@@ -14,9 +14,11 @@ jobs:
       - name: Extract version
         id: get_version
         run: |
+          mkdir -p "/tmp/artifacts/output"
           TAG="${GITHUB_REF#refs/tags/}"
           VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+
       - name: Checkout Code
         uses: actions/checkout@v4
 
@@ -27,4 +29,10 @@ jobs:
 
       - name: Build All Projects
         run: dotnet build ./src/MaksimShimshon.Mediator.slnx  --configuration Release
+
+      - name: Pack NuGet packages
+        run: |
+          VERSION="${{ steps.get_version.outputs.version }}"
+          PROJECT="${{ github.workspace }}/src/MaksimShimshon.Mediator/MaksimShimshon.Mediator.csproj"
+          dotnet pack $PROJECT -c Release -o "/tmp/artifacts/output" /p:Version=$VERSION
 
