@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
+using System.Linq.Expressions;
+using System.Reflection;
 
 namespace MaksimShimshon.Mediator;
 
@@ -67,6 +69,7 @@ public static class ServiceExt
 
             closedHandlerType = typeof(IRequestHandler<,>)
                 .MakeGenericType(requestType, resultType);
+            Mediator._cacheResultMethod[requestType] = CreateResultDelegate(requestType, resultType, closedHandlerType)!;
         }
         else
         {
@@ -76,10 +79,62 @@ public static class ServiceExt
 
             closedHandlerType = typeof(IRequestHandler<>)
                 .MakeGenericType(requestType);
+            Mediator._cacheNoResultMethod[requestType] = CreateNoResultDelegate(requestType, closedHandlerType);
         }
         Console.WriteLine($"Caching Mediator Handler: {requestType.Name} = {handlerType}");
         Mediator._requestCache[requestType] = handlerType;
     }
 
+    public static Func<object, object, CancellationToken, Task<object>> CreateResultDelegate(Type requestType, Type resultType, Type genericInterfaceType)
+    {
+        // FIX: Look up method explicitly safely, bypassing issues with default arguments or empty lookups
+        var methodInfo = genericInterfaceType.GetMethods()
+            .FirstOrDefault(m => m.Name == "HandleAsync" && m.GetParameters().Length == 2)
+            ?? throw new InvalidOperationException($"Could not locate HandleAsync method on {genericInterfaceType.Name}");
+
+        var handlerParam = Expression.Parameter(typeof(object), "handler");
+        var requestParam = Expression.Parameter(typeof(object), "request");
+        var ctParam = Expression.Parameter(typeof(CancellationToken), "ct");
+
+        var castHandler = Expression.Convert(handlerParam, genericInterfaceType);
+        var castRequest = Expression.Convert(requestParam, requestType);
+        var methodCall = Expression.Call(castHandler, methodInfo, castRequest, ctParam);
+
+        // Uses your containing extension/mediator class to extract the static converter
+        var conversionMethod = typeof(ServiceExt) // Make sure this matches your exact file class name!
+            .GetMethod(nameof(ConvertTaskToObject), BindingFlags.Static | BindingFlags.NonPublic)!
+            .MakeGenericMethod(resultType);
+
+        var helperCall = Expression.Call(conversionMethod, methodCall);
+
+        return Expression.Lambda<Func<object, object, CancellationToken, Task<object>>>(
+            helperCall, handlerParam, requestParam, ctParam).Compile();
+    }
+
+    public static Func<object, object, CancellationToken, Task> CreateNoResultDelegate(Type requestType, Type nonGenericInterfaceType)
+    {
+        // FIX: Look up method explicitly safely
+        var methodInfo = nonGenericInterfaceType.GetMethods()
+            .FirstOrDefault(m => m.Name == "HandleAsync" && m.GetParameters().Length == 2)
+            ?? throw new InvalidOperationException($"Could not locate HandleAsync method on {nonGenericInterfaceType.Name}");
+
+        var handlerParam = Expression.Parameter(typeof(object), "handler");
+        var requestParam = Expression.Parameter(typeof(object), "request");
+        var ctParam = Expression.Parameter(typeof(CancellationToken), "ct");
+
+        var castHandler = Expression.Convert(handlerParam, nonGenericInterfaceType);
+        var castRequest = Expression.Convert(requestParam, requestType);
+        var methodCall = Expression.Call(castHandler, methodInfo, castRequest, ctParam);
+
+        var castResult = Expression.Convert(methodCall, typeof(Task));
+
+        return Expression.Lambda<Func<object, object, CancellationToken, Task>>(
+            castResult, handlerParam, requestParam, ctParam).Compile();
+    }
+
+    private static async Task<object?> ConvertTaskToObject<T>(Task<T> task)
+    {
+        return await task;
+    }
 
 }

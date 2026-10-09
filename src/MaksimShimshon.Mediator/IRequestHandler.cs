@@ -8,7 +8,7 @@ public interface IRequestHandler<TCommand> : IRequestHandler
 }
 
 public interface IRequestHandler<TCommand, TResult> : IRequestHandler
-    where TCommand : IRequest
+    where TCommand : IRequest<TResult>
 {
     Task<TResult> HandleAsync(TCommand data, CancellationToken ct = default);
 }

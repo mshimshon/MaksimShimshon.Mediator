@@ -2,6 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="../.github/workflows/build.yml" />
     <File Path="../.github/workflows/deploy.yml" />
+    <File Path="Directory.Packages.props" />
   </Folder>
   <Project Path="MaksimShimshon.Mediator/MaksimShimshon.Mediator.csproj" />
 </Solution>

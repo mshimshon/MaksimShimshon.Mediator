@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <GlobalVersion>1.1.9</GlobalVersion>
+    <GlobalCompany>Maksim Shimshon</GlobalCompany>
+    <GlobalAuthors>Maksim Shimshon</GlobalAuthors>
+    <GlobalCopyright>Maksim Shimshon © 2026</GlobalCopyright>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <UseMicrosoftTestingPlatformRunner>false</UseMicrosoftTestingPlatformRunner>
+  </PropertyGroup>
+</Project>
