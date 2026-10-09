@@ -1,4 +1,7 @@
-﻿namespace MaksimShimshon.Mediator;
+﻿using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace MaksimShimshon.Mediator;
 
 public static class ServiceExt
 {

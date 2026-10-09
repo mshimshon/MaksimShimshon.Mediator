@@ -1,4 +1,6 @@
-﻿namespace MaksimShimshon.Mediator;
+﻿using Microsoft.Extensions.DependencyInjection;
+
+namespace MaksimShimshon.Mediator;
 
 internal class Mediator : IMediator
 {
