@@ -2,37 +2,83 @@ name: Build
 
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+    branches:
+      - main
+
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.sha }}
+  cancel-in-progress: false
 
 jobs:
   build:
-    if: github.event.base_ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      id-token: write
+      contents: read
+    if: >-
+      !contains(github.event.head_commit.message, 'skipci~') &&
+      !contains(github.event.workflow_run.head_commit.message, 'skipci~')
     steps:
-      - name: Extract version
-        id: get_version
-        run: |
-          mkdir -p "/tmp/artifacts/output"
-          TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 👈 This forces GitHub to pull ALL history and tags
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
 
-      - name: Build All Projects
-        run: dotnet build ./src/MaksimShimshon.Mediator.slnx  --configuration Release
-
-      - name: Pack NuGet packages
+      - name: Installing Deploy It Smart
+        shell: bash
         run: |
-          VERSION="${{ steps.get_version.outputs.version }}"
-          PROJECT="${{ github.workspace }}/src/MaksimShimshon.Mediator/MaksimShimshon.Mediator.csproj"
-          dotnet pack $PROJECT -c Release -o "/tmp/artifacts/output" /p:Version=$VERSION
+          dotnet tool install -g DeployItSmart
+          which depitsmart || true
+          echo "/root/.dotnet/tools" >> $GITHUB_PATH
+          mkdir -p /tmp/artifacts/output
 
+
+      - name: Calculating Next Version
+        id: version_control
+        shell: bash
+        run: |
+          depitsmart GetCurrentReleaseVersionRunner --ghOutput
+          depitsmart CalculateNextReleaseVersionRunner --ghOutput
+
+      - name: Generate Release Notes
+        shell: bash
+        run: |
+          depitsmart GenerateChangeLogRunner --output "/tmp/artifacts/output"  --linkCommits
+
+      - name: Compiling Plugin
+        run: bash -e .github/workflows/composition/compiling.sh
+        env:
+          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }}
+          BRANCH:  ${{ github.ref_name }}
+          VERSION_NEXT_PREVIEW: ${{steps.version_control.outputs.version_next_preview}}
+
+      - name: Save Variables for Deploy
+        shell: bash
+        run: |
+          echo "version_next=${{ steps.version_control.outputs.version_next }}" >> /tmp/artifacts/output/build.env
+          echo "version_current=${{ steps.version_control.outputs.version_current }}" >> /tmp/artifacts/output/build.env
+          echo "trigger_branch=${{ github.ref_name }}" >> /tmp/artifacts/output/build.env
+          ls -laR /tmp/artifacts/output || echo "no /tmp/artifacts/output"
+
+      - name: Validating Output
+        run: bash -e .github/workflows/composition/validate_release.sh
+        env:
+          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }}
+          BRANCH:  ${{ github.ref_name }}
+          VERSION_NEXT_PREVIEW: ${{steps.version_control.outputs.version_next_preview}}
+
+      - name: Upload Build Output
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-assets # Label
+          path: /tmp/artifacts/output/

@@ -1,0 +1,8 @@
+{
+    "dotnet.defaultSolution": "src/MaksimShimshon.Mediator.slnx",
+    "git.showActionButton": {
+        "commit": true,
+        "publish": false,
+        "sync": false,
+    }
+}
