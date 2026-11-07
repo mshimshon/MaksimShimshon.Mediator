@@ -70,6 +70,7 @@ jobs:
             /tmp/artifacts/output/MaksimShimshon.Mediator.${{ steps.release_version.outputs.release_version }}.nupkg
 
       - name: Push all NuGet packages with retry
+        if: ${{ !env.ACT }}
         uses: nick-invision/retry@v2
         with:
           timeout_minutes: 30
