@@ -72,9 +72,6 @@ jobs:
         env:
           VERSION_NEXT: ${{ steps.version_control.outputs.version_next }} # this correspond to the CLI variable
 
-
-
-
       - name: Upload Build Output
         uses: actions/upload-artifact@v4
         with:

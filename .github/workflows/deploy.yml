@@ -35,6 +35,7 @@ jobs:
           run-id: ${{ !env.ACT && github.event.workflow_run.id || '' }} # Empty if running ACT
           github-token: ${{ !env.ACT && secrets.GITHUB_TOKEN || '' }} # Empty if running ACT
 
+      # Load the export variables
       - name: Load Variables into Outputs
         id: version_control
         shell: bash
@@ -42,6 +43,7 @@ jobs:
           ls -laR /tmp/artifacts || echo "no /tmp/artifacts"
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' /tmp/artifacts/output/build.env | tr -d '\r' >> "$GITHUB_OUTPUT"
 
+      # Simple Confirmation
       - name: Use the Passed Versions
         shell: bash
         run: |
@@ -60,11 +62,11 @@ jobs:
         if: ${{ !env.ACT }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.release_version.outputs.release_version }}
-          body_path: "/tmp/artifacts/output/_.${{ steps.release_version.outputs.release_version }}.md"
+          tag_name: v${{ steps.version_control.outputs.version_next }}
+          body_path: "/tmp/artifacts/output/_.${{ steps.version_control.outputs.version_next }}.md"
           fail_on_unmatched_files: true
           files: |
-            /tmp/artifacts/output/MaksimShimshon.Mediator.${{ steps.release_version.outputs.release_version }}.nupkg
+            /tmp/artifacts/output/*.nupkg
 
       - name: Push all NuGet packages with retry
         if: ${{ !env.ACT }}
@@ -74,7 +76,7 @@ jobs:
           max_attempts: 10
           retry_wait_seconds: 10
           command: |
-            VERSION="${{ steps.release_version.outputs.release_version }}"
+            VERSION="${{ steps.version_control.outputs.version_next }}"
             for PKG in /tmp/artifacts/output/*.nupkg; do
               echo "Pushing $PKG"
               dotnet nuget push $PKG --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate  || exit 1
