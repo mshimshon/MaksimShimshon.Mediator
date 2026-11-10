@@ -19,22 +19,20 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    if: >-
-      !contains(github.event.head_commit.message, 'skipci~') &&
-      !contains(github.event.workflow_run.head_commit.message, 'skipci~')
+
+    if: ${{ !contains(github.event.head_commit.message, 'skipci~') && !contains(github.event.workflow_run.head_commit.message, 'skipci~') }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 👈 This forces GitHub to pull ALL history and tags
+          fetch-depth: 0 # 👈 CLI Tool Requires git to pull the whole history and tags
 
-      - name: Setup .NET 10 SDK
+      - name: Setup .NET for Tool
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            10.0.x
+          dotnet-version: '10.0.x'
 
-      - name: Installing Deploy It Smart
+      - name: Installing DepItSmart!
         shell: bash
         run: |
           dotnet tool install -g DeployItSmart
@@ -42,43 +40,41 @@ jobs:
           echo "/root/.dotnet/tools" >> $GITHUB_PATH
           mkdir -p /tmp/artifacts/output
 
-
-      - name: Calculating Next Version
+      - name: Calculating Versions
         id: version_control
         shell: bash
         run: |
           depitsmart GetCurrentReleaseVersionRunner --ghOutput
           depitsmart CalculateNextReleaseVersionRunner --ghOutput
 
+      - name: Building Output
+        shell: bash
+        run: bash -e .github/workflows/composition/producing_output.sh
+        env:
+          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }} # this correspond to the CLI variable
+
       - name: Generate Release Notes
         shell: bash
-        run: |
-          depitsmart GenerateChangeLogRunner --output "/tmp/artifacts/output"  --linkCommits
+        run: depitsmart GenerateChangeLogRunner --output "/tmp/artifacts/output"  --linkCommits
 
-      - name: Compiling Plugin
-        run: bash -e .github/workflows/composition/compiling.sh
+      - name: Validating Output
+        shell: bash
+        run: bash -e .github/workflows/composition/validate_output.sh
         env:
-          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }}
-          BRANCH:  ${{ github.ref_name }}
-          VERSION_NEXT_PREVIEW: ${{steps.version_control.outputs.version_next_preview}}
+          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }} # this correspond to the CLI variable
+
 
       - name: Save Variables for Deploy
         shell: bash
         run: |
+          mkdir -p /tmp/artifacts/output
           echo "version_next=${{ steps.version_control.outputs.version_next }}" >> /tmp/artifacts/output/build.env
           echo "version_current=${{ steps.version_control.outputs.version_current }}" >> /tmp/artifacts/output/build.env
           echo "trigger_branch=${{ github.ref_name }}" >> /tmp/artifacts/output/build.env
           ls -laR /tmp/artifacts/output || echo "no /tmp/artifacts/output"
 
-      - name: Validating Output
-        run: bash -e .github/workflows/composition/validate_release.sh
-        env:
-          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }}
-          BRANCH:  ${{ github.ref_name }}
-          VERSION_NEXT_PREVIEW: ${{steps.version_control.outputs.version_next_preview}}
-
       - name: Upload Build Output
         uses: actions/upload-artifact@v4
         with:
           name: build-assets # Label
-          path: /tmp/artifacts/output/
+          path: /tmp/artifacts/output/ # whereever you saved the output.

@@ -24,7 +24,16 @@ public static class ServiceExt
     {
         if (_allServices == default)
             throw new ArgumentException("You must call AddMediatorServices before.");
-        foreach (var sd in _allServices)
+        _allServices.BuildMediatorRouting();
+    }
+    /// <summary>
+    /// Builds the cache routing without it ExecuteAsync will never be able to find corresponding Handler for Query/Command
+    /// </summary>
+    public static void BuildMediatorRouting(this IServiceCollection services)
+    {
+        if (_allServices == default)
+            throw new ArgumentException("You must call AddMediatorServices before.");
+        foreach (var sd in services)
         {
             var implType = sd.ImplementationType ?? sd.ImplementationInstance?.GetType() ?? sd.ServiceType;
 
@@ -37,7 +46,6 @@ public static class ServiceExt
             CacheMediatorService(implType);
         }
     }
-
 
     private static void CacheMediatorService(Type handlerType)
     {

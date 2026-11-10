@@ -21,19 +21,19 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       id-token: write
-      actions: write
       contents: write
 
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+
 
     steps:
       - name: Download Build Output
         uses: actions/download-artifact@v4
         with:
           name: build-assets
-          path: /tmp/artifacts/output
-          run-id: ${{ !env.ACT && github.event.workflow_run.id || '' }}
-          github-token: ${{ !env.ACT && secrets.GITHUB_TOKEN || '' }}
+          path: /tmp/artifacts/output # where ever you saved the output.
+          run-id: ${{ !env.ACT && github.event.workflow_run.id || '' }} # Empty if running ACT
+          github-token: ${{ !env.ACT && secrets.GITHUB_TOKEN || '' }} # Empty if running ACT
 
       - name: Load Variables into Outputs
         id: version_control
@@ -43,13 +43,10 @@ jobs:
           grep -E '^[A-Za-z_][A-Za-z0-9_]*=' /tmp/artifacts/output/build.env | tr -d '\r' >> "$GITHUB_OUTPUT"
 
       - name: Use the Passed Versions
-        id: release_version
         shell: bash
         run: |
-            echo "This is a Stable Release";
-            echo "Next Actual to version: ${{ steps.version_control.outputs.version_next }}"
-            echo "The current version: ${{ steps.version_control.outputs.version_current }}"
-            echo "release_version=${{ steps.version_control.outputs.version_next }}" >> "$GITHUB_OUTPUT"
+              echo "Next Actual to version: ${{ steps.version_control.outputs.version_next }}"
+              echo "The current version: ${{ steps.version_control.outputs.version_current }}"
 
 
       - name: NuGet login (OIDC → temp API key)
