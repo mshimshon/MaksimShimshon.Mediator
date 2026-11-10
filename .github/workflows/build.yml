@@ -57,13 +57,6 @@ jobs:
         shell: bash
         run: depitsmart GenerateChangeLogRunner --output "/tmp/artifacts/output"  --linkCommits
 
-      - name: Validating Output
-        shell: bash
-        run: bash -e .github/workflows/composition/validate_output.sh
-        env:
-          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }} # this correspond to the CLI variable
-
-
       - name: Save Variables for Deploy
         shell: bash
         run: |
@@ -72,6 +65,15 @@ jobs:
           echo "version_current=${{ steps.version_control.outputs.version_current }}" >> /tmp/artifacts/output/build.env
           echo "trigger_branch=${{ github.ref_name }}" >> /tmp/artifacts/output/build.env
           ls -laR /tmp/artifacts/output || echo "no /tmp/artifacts/output"
+
+      - name: Validating Output
+        shell: bash
+        run: bash -e .github/workflows/composition/validate_output.sh
+        env:
+          VERSION_NEXT: ${{ steps.version_control.outputs.version_next }} # this correspond to the CLI variable
+
+
+
 
       - name: Upload Build Output
         uses: actions/upload-artifact@v4
